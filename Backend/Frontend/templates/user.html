@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <title>User Dashboard</title>
+</head>
+<body>
+    <div class="container">
+        <h2>User Dashboard</h2>
+        <div id="movies-list">
+            <!-- Movies will be dynamically loaded here -->
+        </div>
+
+        <div id="review-form-container" style="display: none;">
+            <h3>Leave a Review</h3>
+            <form id="review-form">
+                <input type="hidden" id="movie-id">
+                <input type="number" id="rating" min="1" max="5" placeholder="Rating (1-5)" required>
+                <textarea id="review-text" placeholder="Write your review here..." required></textarea>
+                <button type="submit">Submit Review</button>
+            </form>
+        </div>
+
+        <div id="reviews-container">
+            <!-- Reviews for the selected movie will be displayed here -->
+        </div>
+
+        <button id="logout-btn">Logout</button>
+    </div>
+
+    <script >
+   if (!localStorage.getItem('token')) {
+    window.location.href = '/';
+}
+
+const token = localStorage.getItem('token');
+const moviesListElement = document.getElementById('movies-list');
+const reviewFormContainer = document.getElementById('review-form-container');
+const reviewForm = document.getElementById('review-form');
+const reviewsContainer = document.getElementById('reviews-container');
+const logoutBtn = document.getElementById('logout-btn');
+
+// Fetch and display movies
+async function fetchMovies() {
+    try {
+        const response = await fetch('http://localhost:8000/allmovies/', {
+            
+            headers: {
+
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        if (!response.ok) throw new Error('Failed to fetch movies');
+        const movies = await response.json();
+        displayMovies(movies);
+    } catch (error) {
+        console.error('Error fetching movies:', error);
+        moviesListElement.innerHTML = '<p>Failed to load movies. Please try again later.</p>';
+    }
+}
+
+function displayMovies(movies) {
+    moviesListElement.innerHTML = '<h3>Movies</h3>';
+    movies.forEach(movie => {
+        const movieElement = document.createElement('div');
+        movieElement.innerHTML = `
+            <h4>${movie.title}</h4>
+            <p>Director: ${movie.director}</p>
+            <p>Genre: ${movie.genre}</p>
+            <button onclick="showReviewForm(${movie.id})">Leave a Review</button>
+            <button onclick="showReviews(${movie.id})">Show Reviews</button>
+        `;
+        moviesListElement.appendChild(movieElement);
+    });
+}
+
+function showReviewForm(movieId) {
+    reviewFormContainer.style.display = 'block';
+    document.getElementById('movie-id').value = movieId;
+}
+
+async function submitReview(e) {
+    e.preventDefault();
+
+    // Retrieve values from the form
+    const movieId = document.getElementById('movie-id').value;
+    const rating = document.getElementById('rating').value;
+    const reviewText = document.getElementById('review-text').value;
+
+    // Retrieve user ID and token from localStorage
+    const userId = localStorage.getItem('user_id');
+    const token = localStorage.getItem('token');
+
+    // Ensure userId and token are present
+    if (!userId || !token) {
+        alert('User not logged in or token missing.');
+        return;
+    }
+
+    try {
+        const response = await fetch('http://localhost:8000/reviews/', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                movie_id: parseInt(movieId),
+                user_id: parseInt(userId),  // Include user_id in the request
+                rating: parseInt(rating),
+                review_text: reviewText
+            })
+        });
+
+        if (!response.ok) throw new Error('Failed to submit review');
+        alert('Review submitted successfully!');
+        reviewForm.reset();
+        reviewFormContainer.style.display = 'none';
+        showReviews(movieId);  // Update the review list
+    } catch (error) {
+        console.error('Error submitting review:', error);
+        alert('Failed to submit review. Please try again.');
+    }
+}
+
+
+async function showReviews(movieId) {
+    try {
+        const response = await fetch(`http://localhost:8000/movies/${movieId}/reviews`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        if (!response.ok) throw new Error('Failed to fetch reviews');
+        const reviews = await response.json();
+        displayReviews(reviews);
+    } catch (error) {
+        console.error('Error fetching reviews:', error);
+        reviewsContainer.innerHTML = '<p>Failed to load reviews. Please try again later.</p>';
+    }
+}
+
+function displayReviews(reviews) {
+    reviewsContainer.innerHTML = '<h3>Reviews</h3>';
+    if (reviews.length === 0) {
+        reviewsContainer.innerHTML += '<p>No reviews yet for this movie.</p>';
+    } else {
+        reviews.forEach(review => {
+            const reviewElement = document.createElement('div');
+            reviewElement.innerHTML = `
+                <p>Rating: ${review.rating}/5</p>
+                <p>${review.review_text}</p>
+                <hr>
+            `;
+            reviewsContainer.appendChild(reviewElement);
+        });
+    }
+}
+
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    window.location.href = '/';
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', fetchMovies);
+reviewForm.addEventListener('submit', submitReview);
+logoutBtn.addEventListener('click', logout);
+
+    </script>
+</body>
+</html>
